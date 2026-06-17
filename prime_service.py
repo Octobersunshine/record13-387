@@ -42,6 +42,29 @@ def find_primes_in_range(a: int, b: int) -> list:
     return [start + i for i in range(sieve_size) if sieve[i]]
 
 
+def prime_pi(x: int) -> int:
+    if x < 2:
+        return 0
+    is_prime = bytearray(b'\x01') * (x + 1)
+    is_prime[0:2] = b'\x00\x00'
+    for i in range(2, int(math.isqrt(x)) + 1):
+        if is_prime[i]:
+            is_prime[i * i::i] = b'\x00' * ((x - i * i) // i + 1)
+    return sum(is_prime)
+
+
+def next_prime(n: int) -> int:
+    if n < 2:
+        return 2
+    candidate = n + 1
+    if candidate % 2 == 0:
+        candidate += 1 if candidate != 2 else 0
+    while True:
+        if is_prime(candidate):
+            return candidate
+        candidate += 2
+
+
 class PrimeHandler(BaseHTTPRequestHandler):
     def _send_json(self, status_code: int, data: dict):
         self.send_response(status_code)
@@ -68,6 +91,32 @@ class PrimeHandler(BaseHTTPRequestHandler):
                 "count": len(primes),
                 "primes": primes
             })
+            return
+        if parsed.path == "/pi":
+            params = parse_qs(parsed.query)
+            try:
+                x = int(params.get("x", [])[0])
+            except (IndexError, ValueError):
+                self._send_json(400, {"error": "参数错误：请提供整数 x"})
+                return
+            if x < 0:
+                self._send_json(400, {"error": "参数错误：x 必须是非负整数"})
+                return
+            result = prime_pi(x)
+            self._send_json(200, {"x": x, "pi(x)": result})
+            return
+        if parsed.path == "/next_prime":
+            params = parse_qs(parsed.query)
+            try:
+                n = int(params.get("n", [])[0])
+            except (IndexError, ValueError):
+                self._send_json(400, {"error": "参数错误：请提供整数 n"})
+                return
+            if n < 0:
+                self._send_json(400, {"error": "参数错误：n 必须是非负整数"})
+                return
+            result = next_prime(n)
+            self._send_json(200, {"n": n, "next_prime": result})
             return
         if parsed.path == "/health":
             self._send_json(200, {"status": "ok"})
@@ -96,6 +145,36 @@ class PrimeHandler(BaseHTTPRequestHandler):
                 "primes": primes
             })
             return
+        if parsed.path == "/pi":
+            length = int(self.headers.get("Content-Length", 0))
+            body = self.rfile.read(length).decode("utf-8")
+            try:
+                data = json.loads(body)
+                x = int(data["x"])
+            except (json.JSONDecodeError, KeyError, ValueError, TypeError):
+                self._send_json(400, {"error": "请求体错误：请提供 JSON 格式的 x"})
+                return
+            if x < 0:
+                self._send_json(400, {"error": "参数错误：x 必须是非负整数"})
+                return
+            result = prime_pi(x)
+            self._send_json(200, {"x": x, "pi(x)": result})
+            return
+        if parsed.path == "/next_prime":
+            length = int(self.headers.get("Content-Length", 0))
+            body = self.rfile.read(length).decode("utf-8")
+            try:
+                data = json.loads(body)
+                n = int(data["n"])
+            except (json.JSONDecodeError, KeyError, ValueError, TypeError):
+                self._send_json(400, {"error": "请求体错误：请提供 JSON 格式的 n"})
+                return
+            if n < 0:
+                self._send_json(400, {"error": "参数错误：n 必须是非负整数"})
+                return
+            result = next_prime(n)
+            self._send_json(200, {"n": n, "next_prime": result})
+            return
         self._send_json(404, {"error": "Not Found"})
 
     def log_message(self, format, *args):
@@ -106,7 +185,11 @@ def run_server(host: str = "127.0.0.1", port: int = 8000):
     server = HTTPServer((host, port), PrimeHandler)
     print(f"素数计算服务已启动：http://{host}:{port}")
     print(f"GET  /primes?a=<start>&b=<end>")
-    print(f"POST /primes  JSON: {{\"a\": <start>, \"b\": <end>}}")
+    print(f"POST /primes       JSON: {{\"a\": <start>, \"b\": <end>}}")
+    print(f"GET  /pi?x=<n>           - 素数计数 π(x)")
+    print(f"POST /pi           JSON: {{\"x\": <n>}}")
+    print(f"GET  /next_prime?n=<k>   - 大于 k 的下一个素数")
+    print(f"POST /next_prime  JSON: {{\"n\": <k>}}")
     print(f"GET  /health")
     try:
         server.serve_forever()
