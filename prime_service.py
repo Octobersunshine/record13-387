@@ -17,22 +17,29 @@ def is_prime(n: int) -> bool:
     return True
 
 
+def _base_sieve(limit: int) -> list:
+    is_prime = bytearray(b'\x01') * (limit + 1)
+    is_prime[0:2] = b'\x00\x00'
+    for i in range(2, int(math.isqrt(limit)) + 1):
+        if is_prime[i]:
+            is_prime[i * i::i] = b'\x00' * ((limit - i * i) // i + 1)
+    return [i for i in range(2, limit + 1) if is_prime[i]]
+
+
 def find_primes_in_range(a: int, b: int) -> list:
-    if a > b:
+    if a > b or b < 2:
         return []
     start = max(2, a)
-    primes = []
-    sieve = [True] * (b - start + 1)
-    limit = int(math.isqrt(b))
-    for i in range(2, limit + 1):
-        first = max(i * i, ((start + i - 1) // i) * i)
-        for j in range(first, b + 1, i):
-            if j >= start:
-                sieve[j - start] = False
-    for idx, is_p in enumerate(sieve):
-        if is_p:
-            primes.append(start + idx)
-    return primes
+    sieve_size = b - start + 1
+    sieve = bytearray(b'\x01') * sieve_size
+    base_primes = _base_sieve(int(math.isqrt(b)))
+    for p in base_primes:
+        first = max(p * p, ((start + p - 1) // p) * p)
+        if first % 2 == 0 and p != 2:
+            first += p
+        for j in range(first - start, sieve_size, p):
+            sieve[j] = 0
+    return [start + i for i in range(sieve_size) if sieve[i]]
 
 
 class PrimeHandler(BaseHTTPRequestHandler):
